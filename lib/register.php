@@ -32,6 +32,12 @@ class Registration {
 			$params['org_id'] = $this->data['ic'];
 		}
 
+		if ($this->data['id']) {
+			return $this->api->user_request->registration->update(
+				$this->data['id'], $this->data['token'], $params
+			);
+		}
+
 		return $this->api->user_request->registration->create($params);
 	}
 

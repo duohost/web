@@ -67,6 +67,12 @@ if (!$api)
 <p>Chceš-li fakturu, pošli po schválení přihlášky na <a href="/kontakt/">podporu</a> fakturační údaje.</p>
 </div>
 
+<?php
+if ($f->isResubmit()) {
+	$f->input('id', 'hidden');
+	$f->input('token', 'hidden');
+}
+?>
 
 <div class="row">
 	<input class="btn btn-default" type="submit" id="send" value="Odeslat">

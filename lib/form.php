@@ -10,18 +10,33 @@ class RegistrationForm {
 
 	public function __construct($lang, $data = null) {
 		$this->lang = $lang;
+		$this->initial = array();
 		$this->data = $this->clean($data);
+
+		$param = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_QUERY));
+
+		if ($param) {
+			list($id, $token) = $this->parseToken($param);
+			$this->initial = $this->fetchData($id, $token);
+
+		} elseif ($data && $data['id']) {
+			$this->initial = $this->fetchData($data['id'], $data['token']);
+		}
+	}
+
+	public function isResubmit() {
+		return count($this->initial) > 0;
 	}
 
 	public function isValid($param = null) {
 		if ($param === null)
-			return $this->valid && count($this->errors) == 0;	
+			return $this->valid && count($this->errors) == 0;
 
 		return !array_key_exists($param, $this->errors);
 	}
 
 	public function getErrors() {
-		return $this->errors;	
+		return $this->errors;
 	}
 
 	public function trError($e) {
@@ -86,7 +101,7 @@ class RegistrationForm {
 			id="'.$name.'"
 			name="'.$name.'"
 			placeholder="'.$this->getLabel($name).'"
-			value="'.htmlspecialchars(isset($_POST[$name]) ? $_POST[$name] : '').'"
+			value="'.htmlspecialchars(isset($_POST[$name]) ? $_POST[$name] : $this->initial[$name]).'"
 			class="form-control '.($this->isValid($name) ? '' : 'error').'" ';
 
 		foreach ($attrs as $k => $v)
@@ -99,6 +114,9 @@ class RegistrationForm {
 	public function select($name, $values) {
 		if ($_POST[$name] && array_key_exists($_POST[$name], $values))
 			$selected = $_POST[$name];
+
+		elseif (array_key_exists($name, $this->initial))
+			$selected = $this->initial[$name];
 
 		else
 			$selected = null;
@@ -161,7 +179,7 @@ class RegistrationForm {
 			$fields[] = 'org_name';
 			$fields[] = 'ic';
 		}
-		
+
 		$v = new Validators($this->lang, $fields);
 		$v->validate($this->data);
 
@@ -171,6 +189,60 @@ class RegistrationForm {
 			foreach ($errors as $e)
 				$this->errors[$field][] = $this->trError($e);
 		}
+	}
+
+	protected function parseToken($v) {
+		return explode(':', $v);
+	}
+
+	protected function fetchData($id, $token) {
+		global $api;
+
+		if (!$api)
+			$api = new \HaveAPI\Client(API_URL);
+
+		try {
+			$r = $api->user_request->registration->preview($id, $token);
+
+		} catch (\HaveAPI\Client\Exception\ActionFailed $e) {
+			// TODO: show warning?
+			return array();
+		}
+
+		list($address, $zip, $city, $country) = $this->parseAddress($r->address);
+
+		return array(
+			'id' => $id,
+			'token' => $token,
+			'login' => $r->login,
+			'name' => $r->full_name,
+			'email' => $r->email,
+			'address' => $address,
+			'zip' => $zip,
+			'city' => $city,
+			'country' => $country,
+			'birth' => $r->year_of_birth,
+			'how' => $r->how,
+			'note' => $r->note,
+			'distribution' => $r->os_template_id,
+			'location' => $r->location_id,
+			'currency' => $r->currency,
+		);
+	}
+
+	protected function parseAddress($address) {
+		preg_match(
+			'/([^,]+)(,\s*([^\s]+)\s*(([^,]+)(,\s*([^$]+)$)?)?)?/',
+			$address,
+			$matches
+		);
+
+		return array(
+			$matches[1],
+			$matches[3],
+			$matches[5],
+			$matches[7],
+		);
 	}
 }
 
@@ -266,7 +338,7 @@ class Validators {
 
 		return $ret;
 	}
-	
+
 	public function address($v) {
 		$ret = array();
 
@@ -282,7 +354,7 @@ class Validators {
 
 		return $ret;
 	}
-	
+
 	public function city($v) {
 		$ret = array();
 
@@ -299,7 +371,7 @@ class Validators {
 
 		if (!$v)
 			$ret[] = 'NOTEMPTY';
-		
+
 		# No more validations for English form
 		if ($this->lang === 'en')
 			return $ret;
@@ -331,14 +403,14 @@ class Validators {
 
 	public function ic($v) {
 		$v = preg_replace('/\s/', '', $v);
-		
+
 		if (strlen($v) < 6)
 			return 'LEN_6';
-		
+
 		if (preg_match('/\D/', $v))
 			return 'NUMONLY';
 
-		return true;	
+		return true;
 	}
 
 	function distribution($v) {
@@ -347,14 +419,14 @@ class Validators {
 
 		return true;
 	}
-	
+
 	function location($v) {
 		if (!$v)
 			return 'NOTSELECTED';
 
 		return true;
 	}
-	
+
 	function currency($v) {
 		if (!$v)
 			return 'NOTSELECTED';

@@ -67,6 +67,12 @@ if (!$api)
 <p>If you need an invoice, please send billing information to our <a href="/contact/">support team</a>.</p>
 </div>
 
+<?php
+if ($f->isResubmit()) {
+	$f->input('id', 'hidden');
+	$f->input('token', 'hidden');
+}
+?>
 
 <div class="row">
 	<input class="btn btn-default" type="submit" id="send" value="Send">
